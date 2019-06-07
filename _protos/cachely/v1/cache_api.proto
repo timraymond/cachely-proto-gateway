@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package cachely.v1;
 
+import "google/api/annotations.proto";
+
 option csharp_namespace = "Cachely.V1";
 option go_package = "cachelyv1";
 option java_multiple_files = true;
@@ -14,13 +16,26 @@ option php_namespace = "Cachely\\V1";
 // addressed by a string key.
 service CacheAPI {
   // Get retrieves a value from the cache.
-  rpc Get(GetRequest) returns (GetResponse);
+  rpc Get(GetRequest) returns (GetResponse) {
+    option (google.api.http) = {
+      get: "/cachely/v1/objects/{key}";
+    };
+  }
 
   // Put adds a new value to the cache.
-  rpc Put(PutRequest) returns (PutResponse);
+  rpc Put(PutRequest) returns (PutResponse) {
+    option (google.api.http) = {
+      post: "/cachely/v1/objects";
+      body: "*";
+    };
+  }
 
   // Delete removes a cached value from the cache.
-  rpc Delete(DeleteRequest) returns (DeleteResponse);
+  rpc Delete(DeleteRequest) returns (DeleteResponse) {
+    option (google.api.http) = {
+      delete: "/cachely/v1/objects/{key}";
+    };
+  }
 }
 
 message GetRequest {

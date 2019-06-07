@@ -4,13 +4,18 @@ import (
 	"context"
 	"log"
 	"net"
+	"net/http"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 
+	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	cachelyv1 "github.com/timraymond/cachely/cachelyv1/cachely/v1"
 )
 
@@ -91,8 +96,38 @@ func main() {
 	// Let the world know we are starting and where we are listening
 	log.Printf("starting gRPC service on %s\n", sock.Addr())
 
-	// start listening and responding
-	if err := s.Serve(sock); err != nil {
-		log.Fatalf("failed to serve: %v", err)
+	// setup the gateway
+	mux := runtime.NewServeMux()
+	opts := []grpc.DialOption{grpc.WithInsecure()}
+	err = cachelyv1.RegisterCacheAPIHandlerFromEndpoint(context.TODO(), mux, sock.Addr().String(), opts)
+	if err != nil {
+		log.Println("err starting grpc gateway: err:", err)
+		return
 	}
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
+	wg := sync.WaitGroup{}
+
+	go func() {
+		wg.Add(1)
+		defer wg.Done()
+		// start listening and responding
+		if err := s.Serve(sock); err != nil {
+			log.Fatalf("failed to serve: %v", err)
+		}
+	}()
+
+	go func() {
+		wg.Add(1)
+		defer wg.Done()
+
+		err := http.ListenAndServe(":8080", mux)
+		if err != http.ErrServerClosed {
+			log.Fatalf("failed to serve: %v\n", err)
+		}
+	}()
+
+	<-sig
+	log.Println("Shutdown signal received. Starting graceful shutdown")
 }
